@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自媒体内容分析工具 - n8n + Ollama</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+    
+    header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+    
+    header p {
+      opacity: 0.9;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    input[type="text"],
+    input[type="url"],
+    textarea,
+    select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+    
+    input[type="text"]:focus,
+    input[type="url"]:focus,
+    textarea:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    textarea {
+      min-height: 200px;
+      resize: vertical;
+    }
+    
+    .config-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    
+    @media (max-width: 600px) {
+      .config-row {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+    }
+    
+    .btn-secondary:hover {
+      background: #e0e0e0;
+      box-shadow: none;
+    }
+    
+    .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    /* 结果展示 */
+    .result-section {
+      display: none;
+    }
+    
+    .result-section.active {
+      display: block;
+    }
+    
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+    
+    .score-card {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    .score-card.traffic { border-top: 4px solid #ff6b6b; }
+    .score-card.understanding { border-top: 4px solid #4ecdc4; }
+    .score-card.connection { border-top: 4px solid #45b7d1; }
+    .score-card.packaging { border-top: 4px solid #f9ca24; }
+    .score-card.conversion { border-top: 4px solid #6c5ce7; }
+    
+    .score-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #333;
+    }
+    
+    .score-label {
+      font-size: 0.9rem;
+      color: #666;
+      margin-top: 5px;
+    }
+    
+    .primary-type {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    
+    .primary-type h3 {
+      font-size: 1.8rem;
+      margin-bottom: 5px;
+    }
+    
+    .primary-type p {
+      opacity: 0.9;
+    }
+    
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    
+    .list-item {
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    
+    .list-item:last-child {
+      border-bottom: none;
+    }
+    
+    .list-number {
+      width: 24px;
+      height: 24px;
+      background: #667eea;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    
+    .platform-card {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    
+    .platform-card h4 {
+      color: #667eea;
+      margin-bottom: 5px;
+    }
+    
+    .platform-card p {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    
+    .rewrite-box {
+      background: #f0f4ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .rewrite-box h4 {
+      color: #667eea;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+    
+    .rewrite-box p {
+      color: #333;
+      line-height: 1.6;
+    }
+    
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .loading.active {
+      display: block;
+    }
+    
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #e0e0e0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .error {
+      background: #fff5f5;
+      border: 1px solid #feb2b2;
+      color: #c53030;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .error.active {
+      display: block;
+    }
+    
+    .tabs {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    
+    .tab {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
+      color: #666;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    
+    .tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+      font-weight: 600;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 自媒体内容分析</h1>
+      <p>基于 n8n + Ollama 本地大模型的智能分析工具</p>
+    </header>
+
+    <!-- 输入表单 -->
+    <div class="card" id="inputCard">
+      <h2 style="margin-bottom: 20px;">输入内容</h2>
+      
+      <div class="error" id="error"></div>
+      
+      <div class="form-group">
+        <label for="webhookUrl">n8n Webhook 地址</label>
+        <input type="url" id="webhookUrl" placeholder="http://localhost:5678/webhook/content-analyze" 
+               value="http://localhost:5678/webhook/content-analyze">
+      </div>
+      
+      <div class="form-group">
+        <label for="title">文章标题</label>
+        <input type="text" id="title" placeholder="输入文章标题...">
+      </div>
+      
+      <div class="form-group">
+        <label for="content">正文内容</label>
+        <textarea id="content" placeholder="粘贴你的文章内容...（建议至少200字）"></textarea>
+      </div>
+      
+      <div class="actions">
+        <button class="btn" onclick="analyze()">
+          <span>🚀</span> 开始分析
+        </button>
+        <button class="btn btn-secondary" onclick="clearForm()">
+          <span>🔄</span> 清空
+        </button>
+      </div>
+    </div>
+
+    <!-- 加载中 -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>AI 分析中，请稍候...</p>
+      <p style="font-size: 0.85rem; color: #999; margin-top: 10px;">本地模型处理可能需要 10-30 秒</p>
+    </div>
+
+    <!-- 分析结果 -->
+    <div class="card result-section" id="resultCard">
+      <h2 style="margin-bottom: 20px;">分析结果</h2>
+      
+      <!-- 主要类型 -->
+      <div class="primary-type" id="primaryType">
+        <h3 id="typeName">-</h3>
+        <p id="typeDesc">-</p>
+      </div>
+      
+      <!-- 五层得分 -->
+      <div class="section-title">五层得分分布</div>
+      <div class="score-grid">
+        <div class="score-card traffic">
+          <div class="score-value" id="scoreTraffic">-</div>
+          <div class="score-label">流量层</div>
+        </div>
+        <div class="score-card understanding">
+          <div class="score-value" id="scoreUnderstanding">-</div>
+          <div class="score-label">理解层</div>
+        </div>
+        <div class="score-card connection">
+          <div class="score-value" id="scoreConnection">-</div>
+          <div class="score-label">连接层</div>
+        </div>
+        <div class="score-card packaging">
+          <div class="score-value" id="scorePackaging">-</div>
+          <div class="score-label">包装层</div>
+        </div>
+        <div class="score-card conversion">
+          <div class="score-value" id="scoreConversion">-</div>
+          <div class="score-label">转化层</div>
+        </div>
+      </div>
+      
+      <!-- 标签页 -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('features')">内容特征</button>
+        <button class="tab" onclick="switchTab('suggestions')">策略建议</button>
+        <button class="tab" onclick="switchTab('rewrite')">改写建议</button>
+        <button class="tab" onclick="switchTab('platforms')">平台适配</button>
+      </div>
+      
+      <!-- 内容特征 -->
+      <div class="tab-content active" id="tab-features">
+        <div class="section-title">AI 识别的内容特征</div>
+        <div id="featuresList"></div>
+      </div>
+      
+      <!-- 策略建议 -->
+      <div class="tab-content" id="tab-suggestions">
+        <div class="section-title">策略建议</div>
+        <div id="suggestionsList"></div>
+        
+        <div class="section-title" style="margin-top: 25px;">优化建议</div>
+        <div id="optimizationList"></div>
+      </div>
+      
+      <!-- 改写建议 -->
+      <div class="tab-content" id="tab-rewrite">
+        <div class="section-title">改写优化建议</div>
+        <div id="rewriteContent"></div>
+      </div>
+      
+      <!-- 平台适配 -->
+      <div class="tab-content" id="tab-platforms">
+        <div class="section-title">推荐平台</div>
+        <div id="platformsList"></div>
+        
+        <div class="section-title" style="margin-top: 25px;">各平台适配建议</div>
+        <div id="platformAdaptation"></div>
+      </div>
+      
+      <div class="actions" style="margin-top: 30px;">
+        <button class="btn" onclick="newAnalysis()">
+          <span>📝</span> 分析新内容
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentResult = null;
+    
+    async function analyze() {
+      const webhookUrl = document.getElementById('webhookUrl').value.trim();
+      const title = document.getElementById('title').value.trim();
+      const content = document.getElementById('content').value.trim();
+
+      // 验证
+      if (!webhookUrl) {
+        showError('请输入 n8n Webhook 地址');
+        return;
+      }
+
+      if (!title && !content) {
+        showError('请输入标题或内容');
+        return;
+      }
+
+      // 隐藏错误，显示加载
+      hideError();
+      document.getElementById('inputCard').style.display = 'none';
+      document.getElementById('loading').classList.add('active');
+
+      // 带超时的 fetch（5 分钟）
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 300000);
+
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        currentResult = result;
+        displayResult(result);
+
+      } catch (error) {
+        let msg = error.message;
+        if (error.name === 'AbortError') {
+          msg = '请求超时（5分钟），本地模型处理较慢，请重试';
+        } else if (error.message === 'Failed to fetch') {
+          msg = '无法连接 n8n 服务器。请检查：\n1. n8n 是否已启动\n2. Webhook 地址是否正确\n3. n8n 是否开启了 CORS（Settings → CORS）';
+        }
+        showError('分析失败: ' + msg);
+        document.getElementById('inputCard').style.display = 'block';
+      } finally {
+        clearTimeout(timer);
+        document.getElementById('loading').classList.remove('active');
+      }
+    }
+    
+    function displayResult(result) {
+      // 兼容三种格式：advanced 包装 / webhook 扁平 / 其他
+      const data = result.data?.analysis || result.analysis || result;
+      
+      // 主要类型
+      document.getElementById('typeName').textContent = 
+        `${data.primaryLayer || '-'} - ${data.primaryType || '-'}`;
+      
+      // 五层得分
+      if (data.scores) {
+        document.getElementById('scoreTraffic').textContent = data.scores.traffic || 0;
+        document.getElementById('scoreUnderstanding').textContent = data.scores.understanding || 0;
+        document.getElementById('scoreConnection').textContent = data.scores.connection || 0;
+        document.getElementById('scorePackaging').textContent = data.scores.packaging || 0;
+        document.getElementById('scoreConversion').textContent = data.scores.conversion || 0;
+      }
+      
+      // 内容特征
+      const featuresList = document.getElementById('featuresList');
+      featuresList.innerHTML = (data.characteristics || [])
+        .map((item, i) => `
+          <div class="list-item">
+            <span class="list-number">${i + 1}</span>
+            <span>${item}</span>
+          </div>
+        `).join('');
+      
+      // 策略建议
+      const suggestionsList = document.getElementById('suggestionsList');
+      suggestionsList.innerHTML = (data.suggestions || [])
+        .map((item, i) => `
+          <div class="list-item">
+            <span class="list-number">${i + 1}</span>
+            <span>${item}</span>
+          </div>
+        `).join('');
+      
+      // 优化建议
+      const optimizationList = document.getElementById('optimizationList');
+      optimizationList.innerHTML = (data.optimizationTips || [])
+        .map((item, i) => `
+          <div class="list-item">
+            <span class="list-number">${i + 1}</span>
+            <span>${item}</span>
+          </div>
+        `).join('');
+      
+      // 改写建议
+      const rewriteContent = document.getElementById('rewriteContent');
+      if (data.rewrite) {
+        rewriteContent.innerHTML = `
+          <div class="rewrite-box">
+            <h4>标题优化</h4>
+            <p>${data.rewrite.title || '无建议'}</p>
+          </div>
+          <div class="rewrite-box">
+            <h4>开头优化</h4>
+            <p>${data.rewrite.hook || '无建议'}</p>
+          </div>
+          <div class="rewrite-box">
+            <h4>正文优化</h4>
+            <p>${data.rewrite.body || '无建议'}</p>
+          </div>
+          <div class="rewrite-box">
+            <h4>结尾优化</h4>
+            <p>${data.rewrite.ending || '无建议'}</p>
+          </div>
+        `;
+      }
+      
+      // 推荐平台
+      const platformsList = document.getElementById('platformsList');
+      platformsList.innerHTML = (data.recommendedPlatforms || [])
+        .map((item, i) => `
+          <div class="platform-card">
+            <h4>${i + 1}. ${typeof item === 'string' ? item : item.name}</h4>
+            <p>${typeof item === 'object' ? item.reason : ''}</p>
+          </div>
+        `).join('');
+      
+      // 平台适配
+      const platformAdaptation = document.getElementById('platformAdaptation');
+      if (data.platformAdaptation) {
+        const platforms = ['小红书', '抖音', '知乎', '公众号', 'B站', '微博'];
+        platformAdaptation.innerHTML = platforms
+          .filter(p => data.platformAdaptation[p])
+          .map(p => `
+            <div class="rewrite-box">
+              <h4>${p}</h4>
+              <p>${data.platformAdaptation[p]}</p>
+            </div>
+          `).join('');
+      }
+      
+      // 显示结果
+      document.getElementById('resultCard').classList.add('active');
+    }
+    
+    function switchTab(tabName) {
+      // 切换标签按钮
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // 切换内容
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById('tab-' + tabName).classList.add('active');
+    }
+    
+    function clearForm() {
+      document.getElementById('title').value = '';
+      document.getElementById('content').value = '';
+    }
+    
+    function newAnalysis() {
+      document.getElementById('resultCard').classList.remove('active');
+      document.getElementById('inputCard').style.display = 'block';
+      clearForm();
+    }
+    
+    function showError(message) {
+      const errorEl = document.getElementById('error');
+      errorEl.textContent = message;
+      errorEl.classList.add('active');
+    }
+    
+    function hideError() {
+      document.getElementById('error').classList.remove('active');
+    }
+  </script>
+</body>
+</html>

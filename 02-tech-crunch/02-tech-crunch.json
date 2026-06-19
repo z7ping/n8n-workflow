@@ -1,0 +1,466 @@
+{
+  "id": "RhloJWkaU02qiNJO",
+  "name": "科技资讯日报-V0.1-20260407",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ff65e550-86a1-450a-8065-fb32766ce18e",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "5447b8c9-83c4-4cf2-bb6e-3e573ec80867",
+      "name": "每日8点触发",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().slice(0, 10);\nconst FEISHU_WEBHOOK = $env.FEISHU_WEBHOOK || 'https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_TOKEN';\nreturn [{ json: { date: today, feishuWebhook: FEISHU_WEBHOOK } }];"
+      },
+      "id": "38057db3-cf70-4db7-a539-09d88613c007",
+      "name": "初始化配置",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        208
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://techcrunch.com/feed/",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "ef31c458-b611-47bc-bf8b-ffecacbe1d2c",
+      "name": "TechCrunch RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://hnrss.org/frontpage?points=50",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "7ac1e620-5741-49dc-b17d-c97952f88a9a",
+      "name": "HackerNews RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        208
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "https://www.producthunt.com/feed",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "5de5215b-fdeb-4718-8783-5d5d82f9145e",
+      "name": "ProductHunt RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// TechCrunch 解析 - RSS格式\nconst resp = $input.first().json;\nconst status = resp.statusCode || 0;\nconst body = resp.data || resp.body || '';\n\nif (status !== 200 || !body || body.length < 100) {\n    return [{ json: { source: 'TechCrunch', items: [], error: `HTTP ${status}`, detail: '请求失败' } }];\n}\n\nconst items = [];\nconst itemRegex = /<item[\\s>]*([\\s\\S]*?)<\\/item>/gi;\nlet match;\nlet count = 0;\n\nwhile ((match = itemRegex.exec(body)) !== null && count < 10) {\n    const xml = match[1];\n\n    // 提取标题\n    let title = '';\n    const titleMatch = xml.match(/<title>([\\s\\S]*?)<\\/title>/i);\n    if (titleMatch) {\n        title = titleMatch[1].replace(/<\\!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/, '$1').trim();\n    }\n\n    // 提取链接\n    let link = '';\n    const linkMatch = xml.match(/<link>(.*?)<\\/link>/i);\n    if (linkMatch) link = linkMatch[1].trim();\n\n    // 提取描述\n    let desc = '';\n    const descMatch = xml.match(/<description>([\\s\\S]*?)<\\/description>/i);\n    if (descMatch) {\n        desc = descMatch[1].replace(/<\\!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/, '$1');\n        desc = desc.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').substring(0, 200).trim();\n    }\n\n    // 提取日期\n    let date = '';\n    const dateMatch = xml.match(/<pubDate>(.*?)<\\/pubDate>/i);\n    if (dateMatch) date = dateMatch[1].trim();\n\n    // 提取作者\n    let author = '';\n    const creatorMatch = xml.match(/<dc:creator>([\\s\\S]*?)<\\/dc:creator>/i);\n    if (creatorMatch) {\n        author = creatorMatch[1].replace(/<\\!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/, '$1').trim();\n    }\n\n    if (title) {\n        items.push({ title, link, description: desc, date, author });\n        count++;\n    }\n}\n\nreturn [{ json: { source: 'TechCrunch', items, count: items.length } }];"
+      },
+      "id": "6a13a007-d413-4411-a81a-0365e452fb50",
+      "name": "解析TechCrunch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// HackerNews 解析 - RSS格式\nconst resp = $input.first().json;\nconst status = resp.statusCode || 0;\nconst body = resp.data || resp.body || '';\n\nif (status !== 200 || !body || body.length < 100) {\n    return [{ json: { source: 'HackerNews', items: [], error: `HTTP ${status}`, detail: '请求失败' } }];\n}\n\nconst items = [];\nconst itemRegex = /<item[\\s>]*([\\s\\S]*?)<\\/item>/gi;\nlet match;\nlet count = 0;\n\nwhile ((match = itemRegex.exec(body)) !== null && count < 10) {\n    const xml = match[1];\n\n    let title = '';\n    const titleMatch = xml.match(/<title>([\\s\\S]*?)<\\/title>/i);\n    if (titleMatch) {\n        title = titleMatch[1].replace(/<\\!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/, '$1').trim();\n    }\n\n    let link = '';\n    const linkMatch = xml.match(/<link>(.*?)<\\/link>/i);\n    if (linkMatch) link = linkMatch[1].trim();\n\n    let desc = '';\n    const descMatch = xml.match(/<description>([\\s\\S]*?)<\\/description>/i);\n    if (descMatch) {\n        desc = descMatch[1].replace(/<\\!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/, '$1');\n        desc = desc.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').substring(0, 200).trim();\n    }\n\n    let date = '';\n    const dateMatch = xml.match(/<pubDate>(.*?)<\\/pubDate>/i);\n    if (dateMatch) date = dateMatch[1].trim();\n\n    // 提取Points\n    let points = 0;\n    const pointsMatch = desc.match(/Points:\\s*(\\d+)/);\n    if (pointsMatch) points = parseInt(pointsMatch[1]);\n\n    if (title) {\n        items.push({ title, link, description: desc, date, points });\n        count++;\n    }\n}\n\nreturn [{ json: { source: 'HackerNews', items, count: items.length } }];"
+      },
+      "id": "a5895384-1310-4eaf-af5d-0a287c35dfd4",
+      "name": "解析HackerNews",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        208
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ProductHunt 解析 - Atom格式\nconst resp = $input.first().json;\nconst status = resp.statusCode || 0;\nconst body = resp.data || resp.body || '';\n\nif (status !== 200 || !body || body.length < 100) {\n    return [{ json: { source: 'ProductHunt', items: [], error: `HTTP ${status}`, detail: '请求失败' } }];\n}\n\nconst items = [];\nconst entryRegex = /<entry[\\s>]*([\\s\\S]*?)<\\/entry>/gi;\nlet match;\nlet count = 0;\n\nwhile ((match = entryRegex.exec(body)) !== null && count < 10) {\n    const xml = match[1];\n\n    // 提取标题 (纯文本，无CDATA)\n    let title = '';\n    const titleMatch = xml.match(/<title>([\\s\\S]*?)<\\/title>/i);\n    if (titleMatch) {\n        title = titleMatch[1].trim();\n    }\n\n    // 提取链接 - 在href属性里！\n    let link = '';\n    const linkMatch = xml.match(/<link[^>]*rel=\"alternate\"[^>]*href=\"([^\"]+)\"/i);\n    if (linkMatch) {\n        link = linkMatch[1];\n    }\n\n    // 提取描述 - 在content标签里，HTML实体编码\n    let desc = '';\n    const contentMatch = xml.match(/<content[^>]*>([\\s\\S]*?)<\\/content>/i);\n    if (contentMatch) {\n        desc = contentMatch[1];\n        // 解码HTML实体\n        desc = desc.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');\n        // 提取第一个p标签内容\n        const pMatch = desc.match(/<p>(.*?)<\\/p>/i);\n        if (pMatch) {\n            desc = pMatch[1].trim();\n        } else {\n            desc = desc.replace(/<[^>]+>/g, ' ').substring(0, 200).trim();\n        }\n    }\n\n    if (title) {\n        items.push({ title, link, description: desc });\n        count++;\n    }\n}\n\nreturn [{ json: { source: 'ProductHunt', items, count: items.length } }];"
+      },
+      "id": "219fcc18-14bb-4840-98b5-92783fdf951b",
+      "name": "解析ProductHunt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 格式化日报 - 飞书卡片兼容格式\nconst allData = $input.all().map(i => i.json);\nconst config = $('初始化配置').first().json;\nconst date = config.date;\n\nconst sources = [\n  { key: 'TechCrunch',   icon: '🐦', label: 'TechCrunch 热门' },\n  { key: 'HackerNews',   icon: '🔶', label: 'HackerNews 热门' },\n  { key: 'ProductHunt',  icon: '🚀', label: 'Product Hunt 今日新品' }\n];\n\nconst dataMap = new Map();\nfor (const d of allData) dataMap.set(d.source, d);\n\nconst results = sources.map(s => {\n  const raw = dataMap.get(s.key) || { items: [], error: null, detail: null };\n  return { ...s, ...raw };\n});\n\nconst totalItems = results.reduce((sum, r) => sum + (r.items?.length || 0), 0);\nconst errors = results\n  .filter(r => r.error)\n  .map(r => ({ source: r.key, msg: r.error, detail: r.detail }));\n\nconst now = new Date();\nconst beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);\nconst timeStr = beijingTime.toISOString().replace('T', ' ').slice(0, 19) + ' (北京时间)';\n\nconst okCount = results.length - errors.length;\nlet md = '';\n\nif (okCount === results.length) {\n  md += `**✅ 所有数据源获取成功** | 📊 总文章数: ${totalItems} 条\\n\\n`;\n} else {\n  md += `**⚠️ 数据获取状态**\\n`;\n  md += `✅ 成功: ${okCount}/${results.length} 个数据源\\n`;\n  md += `❌ 失败: ${errors.length}/${results.length} 个数据源\\n`;\n  md += `📊 总文章数: ${totalItems} 条\\n\\n`;\n  md += `**错误详情:**\\n`;\n  errors.forEach(e => {\n    md += `- **${e.source}**: ${e.msg}${e.detail ? '\\n  > ' + e.detail : ''}\\n`;\n  });\n  md += '\\n';\n}\n\nresults.forEach(r => {\n  md += `---\\n`;\n  md += `**${r.icon} ${r.label}**`;\n  if (r.error) {\n    md += ` ❌ ${r.error}\\n\\n`;\n    return;\n  }\n  const count = r.items?.length || 0;\n  md += ` (${count}条)\\n`;\n  if (count === 0) {\n    md += `> 本时段暂无数据\\n\\n`;\n    return;\n  }\n  (r.items || []).forEach((item, i) => {\n    const title = item.title || '(无标题)';\n    const desc = item.description ? ` — ${String(item.description).substring(0, 120)}` : '';\n    const score = r.key === 'HackerNews' && item.points ? ` (${item.points}分)` : '';\n    const link = item.link ? ` [🔗查看详情](${item.link})` : '';\n    md += `${i + 1}. **${title}**${score}${desc}${link}\\n`;\n  });\n  md += '\\n';\n});\n\nmd += `---\\n*由 n8n 自动生成 | ${timeStr}*`;\n\nreturn [{ \n  json: { \n    markdown: md, \n    date, \n    totalItems, \n    errorCount: errors.length, \n    errors, \n    feishuWebhook: config.feishuWebhook \n  } \n}];"
+      },
+      "id": "b0a2c156-fb4a-4dd6-beb2-ebf8f22d5818",
+      "name": "格式化日报",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        272
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/tech-digest/tech-digest-{{ $json.date }}.md",
+        "options": {}
+      },
+      "id": "b073c55f-ad5e-431c-9ceb-80849ad3a6c2",
+      "name": "保存Markdown",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        912,
+        112
+      ],
+      "disabled": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst md = data.markdown || '';\nconst truncated = md.length > 8000 ? md.substring(0, 7900) + '\\n\\n... (内容已截断)' : md;\n\nconst title = data.errorCount > 0\n  ? `📊 科技资讯日报 (⚠️ ${data.errorCount}个源失败)`\n  : '📊 科技资讯日报';\nconst template = data.errorCount > 0 ? 'red' : 'blue';\n\nconst payload = {\n  msg_type: \"interactive\",\n  card: {\n    schema: \"2.0\",\n    config: { wide_screen_mode: true },\n    header: {\n      title: { tag: \"plain_text\", content: `${title} ${data.date}` },\n      template: template\n    },\n    body: {\n      elements: [\n        { tag: \"markdown\", content: truncated }\n      ]\n    }\n  }\n};\n\nreturn [{\n  json: {\n    webhookUrl: data.feishuWebhook,\n    payload: payload,\n    date: data.date,\n    totalItems: data.totalItems,\n    errorCount: data.errorCount\n  }\n}];"
+      },
+      "id": "46c290ba-9f4a-4e14-9dc9-3ecb0cde38bd",
+      "name": "准备飞书消息",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        304
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.webhookUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "8a53e99d-91c0-46a0-9b26-9ef397ce43ff",
+      "name": "发送飞书群",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1120,
+        304
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst feishuResp = $input.all()[1]?.json;\n\nlet feishuStatus = '未执行';\nif (feishuResp) {\n    if (feishuResp.statusCode === 200) {\n        const body = feishuResp.body || {};\n        feishuStatus = body.code === 0 ? '✅ 发送成功' : `❌ API错误: ${body.code}`;\n    } else {\n        feishuStatus = `❌ HTTP错误: ${feishuResp.statusCode}`;\n    }\n}\n\nif (data.feishuWebhook && data.feishuWebhook.includes('你的机器人令牌')) {\n    feishuStatus = '❌ 请配置飞书Webhook';\n}\n\nreturn [{ json: { message: `✅ 日报生成完成: ${data.date}`, totalItems: data.totalItems, errors: data.errorCount > 0 ? `${data.errorCount}个数据源失败` : '无', feishuStatus } }];"
+      },
+      "id": "64c1ce74-a7da-49c7-9352-99e3b72a00cb",
+      "name": "输出结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        208
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        512,
+        192
+      ],
+      "id": "fe3e301a-5a13-4d53-a292-3c0fc0a497b1",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allData = $input.all().map(i => i.json);\n\n// ========== 数据清洗 ==========\nfunction cleanText(str) {\n  if (!str || typeof str !== 'string') return '';\n  return str\n    .replace(/https?:\\/\\/[^\\s]+/g, '')      // 去URL（最先）\n    .replace(/<[^>]+>/g, '')                // 去HTML标签\n    .replace(/&\\w+;/g, '')                  // 去HTML实体\n    .replace(/\\n/g, ' ')                    // 换行转空格\n    .replace(/\\s+/g, ' ')                   // 合并空格\n    .trim();\n}\n\nfunction isRealEnglish(text) {\n  if (!text || text.length < 5) return false;\n  const letters = (text.match(/[a-zA-Z]/g) || []).length;\n  const total = text.replace(/\\s/g, '').length;\n  return total > 0 && letters > 10 && (letters / total) > 0.6;\n}\n\n// ========== 收集待翻译文本 ==========\nconst textsToTranslate = [];\nconst textMap = [];\n\nfor (let sIdx = 0; sIdx < allData.length; sIdx++) {\n  const source = allData[sIdx];\n  if (!source?.items) continue;\n  \n  for (let iIdx = 0; iIdx < source.items.length; iIdx++) {\n    const item = source.items[iIdx];\n    \n    // title\n    const cleanTitle = cleanText(item.title);\n    if (isRealEnglish(cleanTitle)) {\n      textsToTranslate.push(cleanTitle.substring(0, 300));\n      textMap.push({ sIdx, iIdx, field: 'title', original: cleanTitle });\n    }\n    \n    // description\n    const cleanDesc = cleanText(item.description);\n    if (isRealEnglish(cleanDesc)) {\n      const descShort = cleanDesc.substring(0, 100);\n      textsToTranslate.push(descShort);\n      textMap.push({ sIdx, iIdx, field: 'description', original: descShort, fullDesc: cleanDesc });\n    }\n  }\n}\n\n// ========== 去重 ==========\nconst uniqueTexts = [...new Set(textsToTranslate)];\nconsole.log(`需翻译: ${uniqueTexts.length} 条, 对应位置: ${textMap.length} 个`);\n\n// ========== 分批翻译 ==========\nconst batchSize = 30;\nconst batches = [];\nfor (let i = 0; i < uniqueTexts.length; i += batchSize) {\n  batches.push(uniqueTexts.slice(i, i + batchSize));\n}\n\nconsole.log(`分 ${batches.length} 批，每批 ${batchSize} 条`);\n\nconst translatedMap = {};\n\nfor (let i = 0; i < batches.length; i++) {\n  const batch = batches[i];\n  console.log(`执行批次 ${i + 1}/${batches.length}，${batch.length} 条...`);\n  \n  const prompt = `将以下${batch.length}个英文翻译成中文。规则：\n1. 标题：简洁有力，20字内，保留产品名\n2. 描述：通顺易懂，80字内\n3. 每行一个翻译结果，不要编号，不要解释，不要引号\n\n待翻译：\n${batch.map((t, idx) => `${idx + 1}. ${t}`).join('\\n')}\n\n翻译结果：`;\n\n  try {\n    const response = await this.helpers.httpRequest({\n      method: 'POST',\n      url: `http://${$env.OLLAMA_HOST || 'localhost'}:${$env.OLLAMA_PORT || '11434'}/v1/chat/completions`,\n      headers: { 'Content-Type': 'application/json' },\n      body: {\n        // model: 'qwen3:0.6b',\n        // model: 'qwen3:1.7b',\n        model: 'qwen2.5:3b',\n        messages: [\n          { role: 'system', content: '你是科技资讯翻译助手。' },\n          { role: 'user', content: prompt }\n        ],\n        temperature: 0.1,\n        max_tokens: 2000,\n        stream: false\n      },\n      timeout: 720000\n    });\n\n    const content = response.choices?.[0]?.message?.content || '';\n    console.log(`批次 ${i + 1} 返回长度: ${content.length}`);\n    \n    // 解析\n    const lines = content.split('\\n')\n      .map(l => l.replace(/^\\d+[\\.\\s]+/, '').trim())\n      .filter(l => l.length > 0 && !l.includes('待翻译') && !l.includes('翻译结果') && !l.includes('规则'));\n\n    console.log(`批次 ${i + 1} 解析出 ${lines.length} 行`);\n\n    // 回填（严格按索引，数量不对时取最小）\n    const matchCount = Math.min(batch.length, lines.length);\n    for (let j = 0; j < matchCount; j++) {\n      if (lines[j] && lines[j] !== batch[j]) {\n        translatedMap[batch[j]] = lines[j];\n      }\n    }\n    \n    if (matchCount < batch.length) {\n      for (let j = matchCount; j < batch.length; j++) {\n        console.log(`未匹配[${j}]: ${batch[j].substring(0, 50)}`);\n      }\n    }\n\n    console.log(`批次 ${i + 1} 成功: ${matchCount}/${batch.length}`);\n\n  } catch (e) {\n    console.log(`批次 ${i + 1} 错误: ${e.message}`);\n  }\n}\n\n// ========== 回填到原JSON ==========\nlet translatedCount = 0;\ntextMap.forEach(pos => {\n  const translated = translatedMap[pos.original];\n  if (translated) {\n    translatedCount++;\n    if (pos.field === 'title') {\n      allData[pos.sIdx].items[pos.iIdx].title = translated;\n    } else {\n      const ratio = translated.length / pos.original.length;\n      const targetLen = Math.min(Math.floor(pos.fullDesc.length * ratio * 1.2), 180);\n      allData[pos.sIdx].items[pos.iIdx].description = translated.substring(0, targetLen) + (targetLen < translated.length ? '...' : '');\n    }\n  }\n});\n\nconsole.log(`最终回填: ${translatedCount}/${textMap.length}`);\n\nreturn allData.map(source => ({ json: source }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        544
+      ],
+      "id": "4c3e8fde-4b1b-4858-8689-d87e085bc9a9",
+      "name": "准备批量翻译"
+    }
+  ],
+  "connections": {
+    "手动触发": {
+      "main": [
+        [
+          {
+            "node": "初始化配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "每日8点触发": {
+      "main": [
+        [
+          {
+            "node": "初始化配置",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "初始化配置": {
+      "main": [
+        [
+          {
+            "node": "TechCrunch RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HackerNews RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ProductHunt RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TechCrunch RSS": {
+      "main": [
+        [
+          {
+            "node": "解析TechCrunch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HackerNews RSS": {
+      "main": [
+        [
+          {
+            "node": "解析HackerNews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ProductHunt RSS": {
+      "main": [
+        [
+          {
+            "node": "解析ProductHunt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析TechCrunch": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析HackerNews": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "格式化日报": {
+      "main": [
+        [
+          {
+            "node": "准备飞书消息",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "保存Markdown": {
+      "main": [
+        [
+          {
+            "node": "输出结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备飞书消息": {
+      "main": [
+        [
+          {
+            "node": "发送飞书群",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "发送飞书群": {
+      "main": [
+        [
+          {
+            "node": "输出结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析ProductHunt": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "准备批量翻译",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "准备批量翻译": {
+      "main": [
+        [
+          {
+            "node": "格式化日报",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": {
+    "node:每日8点触发": {
+      "recurrenceRules": []
+    }
+  }
+}

@@ -1,0 +1,432 @@
+{
+  "name": "GitHub Trending AI 每日追踪",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "github-trending-trigger",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "GitHub Trending Webhook",
+      "position": [
+        -464,
+        608
+      ],
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "webhookId": "github-trending-test"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule",
+      "name": "每日9点触发",
+      "position": [
+        -464,
+        208
+      ],
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3
+    },
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "手动触发",
+      "position": [
+        -464,
+        400
+      ],
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = new Date().toISOString().slice(0, 10);\nconst FEISHU_WEBHOOK = $env.N8N_01_FEISHU_WEBHOOK || 'https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_N8N_01_FEISHU_WEBHOOK';\nconst BITABLE_APP = $env.N8N_01_FEISHU_BITABLE_TOKEN || 'YOUR_N8N_01_FEISHU_BITABLE_TOKEN';\nconst BITABLE_TABLE = $env.N8N_01_FEISHU_TABLE_CLASSIC || 'YOUR_N8N_01_FEISHU_TABLE_CLASSIC';\nconst startTime = Date.now();\nreturn [{ json: { date: today, feishuWebhook: FEISHU_WEBHOOK, bitableApp: BITABLE_APP, bitableTable: BITABLE_TABLE, startTime } }];"
+      },
+      "id": "config",
+      "name": "初始化配置",
+      "position": [
+        -240,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/search/repositories",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "llm OR ai OR agent OR mcp OR claude OR agentic stars:>5000"
+            },
+            {
+              "name": "sort",
+              "value": "stars"
+            },
+            {
+              "name": "order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "github_api",
+      "name": "GitHub Search API",
+      "position": [
+        0,
+        304
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst status = resp.statusCode || 0;\nconst body = resp.data || resp.body || {};\nconst config = $('初始化配置').first().json;\n\nif (status !== 200 || !body.items) {\n    return [{ json: { items: [], trendingItems: [], error: `HTTP ${status}`, date: config.date, feishuWebhook: config.feishuWebhook, bitableApp: config.bitableApp, bitableTable: config.bitableTable } }];\n}\n\nconst items = body.items.map(repo => ({\n    name: repo.full_name,\n    stars: repo.stargazers_count,\n    description: (repo.description || '').substring(0, 200),\n    url: repo.html_url,\n    createdAt: repo.created_at,\n    language: repo.language || 'N/A',\n    topics: (repo.topics || []).join(', ')\n}));\n\nconst uniqueMap = new Map();\nitems.forEach(item => { if (!uniqueMap.has(item.name)) uniqueMap.set(item.name, item); });\nconst uniqueItems = Array.from(uniqueMap.values());\n\nconst existingItems = uniqueItems.filter(i => i.stars >= 10000);\nconst trendingItems = uniqueItems.filter(i => i.stars < 10000 && i.stars >= 100);\n\nreturn [{ json: { items: existingItems, trendingItems, totalFound: body.total_count, date: config.date, feishuWebhook: config.feishuWebhook, bitableApp: config.bitableApp, bitableTable: config.bitableTable } }];"
+      },
+      "id": "filter",
+      "name": "数据清洗与分类",
+      "position": [
+        240,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst items = data.items || [];\nconst topItems = items.slice(0, 20);\nconst descs = topItems.map(i => (i.description || '').substring(0, 150)).filter(d => d.length > 10 && /[a-zA-Z]/.test(d));\n\nlet translationOk = true;\nlet translationError = '';\n\nif (descs.length === 0) {\n    topItems.forEach(i => { i.descriptionCn = i.description || '' });\n    return [{ json: { ...data, items, topItems, translationOk: true, translationError: '', translatedCount: 0 } }];\n}\n\nconst batchSize = 10;\nconst translatedMap = {};\n\nfor (let i = 0; i < descs.length; i += batchSize) {\n    const batch = descs.slice(i, i + batchSize);\n    const prompt = '将以下' + batch.length + '个项目描述翻译成中文。规则：\\n1. 通顺易懂，50字内\\n2. 保留技术术语\\n3. 每行一个翻译结果，不要编号\\n\\n待翻译：\\n' + batch.map((d, idx) => (idx+1) + '. ' + d).join('\\n') + '\\n\\n翻译结果：';\n    try {\n        const response = await this.helpers.httpRequest({\n            method: 'POST', url: `http://${$env.N8N_01_OLLAMA_HOST || 'localhost'}:${$env.N8N_01_OLLAMA_PORT || '11434'}/v1/chat/completions`,\n            headers: { 'Content-Type': 'application/json' },\n            body: { model: 'qwen2.5:3b', messages: [{ role: 'system', content: '你是项目描述翻译助手。' }, { role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1500, stream: false }, timeout: 120000\n        });\n        const content = response.choices?.[0]?.message?.content || '';\n        const lines = content.split('\\n').map(l => l.replace(/^\\d+[\\.\\s]+/, '').trim()).filter(l => l.length > 0);\n        const matchCount = Math.min(batch.length, lines.length);\n        for (let j = 0; j < matchCount; j++) {\n            if (lines[j]) translatedMap[batch[j]] = lines[j];\n        }\n    } catch (e) {\n        translationOk = false;\n        translationError = e.message;\n    }\n}\n\ntopItems.forEach(item => {\n    const desc = item.description || '';\n    item.descriptionCn = translatedMap[desc] || desc;\n});\n\nreturn [{ json: { ...data, items, topItems, translationOk, translationError, translatedCount: Object.keys(translatedMap).length, totalToTranslate: descs.length } }];"
+      },
+      "id": "59574594-1310-4aba-bf8d-d34eb6f8bff9",
+      "name": "同步翻译(通知用)",
+      "position": [
+        368,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst items = data.items || [];\n\nconst APP_ID = $env.N8N_01_FEISHU_APP_ID || 'YOUR_N8N_01_FEISHU_APP_ID';\nconst APP_SECRET = $env.N8N_01_FEISHU_APP_SECRET || 'YOUR_N8N_01_FEISHU_APP_SECRET';\n\nlet token = '';\ntry {\n    const tokenResp = await this.helpers.httpRequest({\n        method: 'POST', url: 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',\n        headers: { 'Content-Type': 'application/json' },\n        body: { app_id: APP_ID, app_secret: APP_SECRET }, timeout: 10000\n    });\n    token = tokenResp.tenant_access_token;\n} catch (e) {\n    return [{ json: { ...data, error: 'Token获取失败: ' + e.message, writeCount: 0, tokenOk: false } }];\n}\nif (!token) return [{ json: { ...data, error: 'Token为空', writeCount: 0, tokenOk: false } }];\n\nconst records = items.map(item => ({\n    fields: {\n        '项目名': item.name, 'Stars': item.stars, '描述': item.description,\n        '中文描述': item.descriptionCn || '', '链接': { text: item.name, link: item.url },\n        '语言': item.language, '拉取日期': new Date(data.date).getTime()\n    }\n}));\n\nlet writeResult = null;\ntry {\n    writeResult = await this.helpers.httpRequest({\n        method: 'POST',\n        url: `https://open.feishu.cn/open-apis/bitable/v1/apps/${data.bitableApp}/tables/${data.bitableTable}/records/batch_create`,\n        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },\n        body: { records }, timeout: 60000\n    });\n} catch (e) {\n    return [{ json: { ...data, error: '写入失败: ' + e.message, writeCount: 0, tokenOk: true } }];\n}\n\nconst writeCount = writeResult?.data?.records?.length || 0;\nreturn [{ json: { ...data, bitableResult: writeResult, writeCount, tokenOk: true } }];"
+      },
+      "id": "write_bitable",
+      "name": "写入飞书多维表格",
+      "position": [
+        480,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst config = $('初始化配置').first().json;\nconst items = data.items || [];\nconst date = config.date;\nconst feishuWebhook = config.feishuWebhook;\n\n// 翻译状态\nconst transOk = data.translationOk !== false;\nconst transCount = data.translatedCount || 0;\nconst transTotal = data.totalToTranslate || 0;\nconst transErr = data.translationError || '';\n\n// 写入状态\nconst writeOk = data.tokenOk !== false;\nconst writeCount = data.writeCount || 0;\nconst writeErr = data.error || '';\n\nlet md = '';\n\n// 状态区\nif (!writeOk) {\n    md += '⚠️ **表格写入失败**: ' + writeErr + '\\n\\n';\n}\nif (!transOk && transTotal > 0) {\n    md += '⚠️ **翻译服务异常**: ' + transErr.substring(0, 80) + '\\n   已翻译 ' + transCount + '/' + transTotal + ' 条\\n\\n';\n}\n\nmd += '**📊 数据概览**\\n';\nmd += '· 收录项目: **' + items.length + '** 个\\n';\nmd += '· 表格写入: ' + (writeOk ? '✅ ' + writeCount + ' 条' : '❌ 失败') + '\\n';\nmd += '· 翻译状态: ' + (transOk ? '✅ ' + transCount + '/' + transTotal : '⚠️ 部分失败 ' + transCount + '/' + transTotal) + '\\n\\n';\n\n// 项目列表\nif (items.length > 0) {\n    const tier1 = items.filter(i => i.stars >= 50000);\n    const tier2 = items.filter(i => i.stars >= 20000 && i.stars < 50000);\n    const tier3 = items.filter(i => i.stars >= 10000 && i.stars < 20000);\n\n    if (tier1.length > 0) {\n        md += '**👑 超级巨星** (' + tier1.length + '个)\\n';\n        tier1.slice(0, 6).forEach((item, i) => {\n            const desc = (item.descriptionCn || item.description || '').substring(0, 50);\n            md += (i+1) + '. [' + item.name + '](' + item.url + ') ⭐' + item.stars.toLocaleString() + '\\n   ' + desc + '\\n';\n        });\n        md += '\\n';\n    }\n    if (tier2.length > 0) {\n        md += '**🌟 顶级项目** (' + tier2.length + '个)\\n';\n        tier2.slice(0, 6).forEach((item, i) => {\n            const desc = (item.descriptionCn || item.description || '').substring(0, 50);\n            md += (i+1) + '. [' + item.name + '](' + item.url + ') ⭐' + item.stars.toLocaleString() + '\\n   ' + desc + '\\n';\n        });\n        md += '\\n';\n    }\n    if (tier3.length > 0) {\n        md += '**⭐ 热门项目** (' + tier3.length + '个)\\n';\n        tier3.slice(0, 5).forEach((item, i) => {\n            const desc = (item.descriptionCn || item.description || '').substring(0, 50);\n            md += (i+1) + '. [' + item.name + '](' + item.url + ') ⭐' + item.stars.toLocaleString() + '\\n   ' + desc + '\\n';\n        });\n        if (tier3.length > 5) md += '... 等' + tier3.length + '个\\n';\n    }\n}\n\nmd += '\\n---\\n📅 ' + date + ' · 数据已同步至飞书表格';\n\nconst payload = {\n    msg_type: 'interactive',\n    card: {\n        schema: '2.0',\n        config: { wide_screen_mode: true },\n        header: {\n            title: { tag: 'plain_text', content: '📊 GitHub AI 热门项目 ' + date },\n            template: 'blue'\n        },\n        body: { elements: [{ tag: 'markdown', content: md }] }\n    }\n};\n\ntry {\n    await this.helpers.httpRequest({ method: 'POST', url: feishuWebhook, headers: { 'Content-Type': 'application/json' }, body: payload, timeout: 10000 });\n    return [{ json: { message: '经典通知已发送', date, itemCount: items.length } }];\n} catch (e) {\n    return [{ json: { error: '通知发送失败: ' + e.message, date } }];\n}"
+      },
+      "id": "notify_classic",
+      "name": "发送飞书通知(经典)",
+      "position": [
+        720,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst items = data.items || [];\nconst bitableApp = data.bitableApp;\nconst bitableTable = data.bitableTable;\nconst date = data.date;\n\nconst APP_ID = $env.N8N_01_FEISHU_APP_ID || 'YOUR_N8N_01_FEISHU_APP_ID';\nconst APP_SECRET = $env.N8N_01_FEISHU_APP_SECRET || 'YOUR_N8N_01_FEISHU_APP_SECRET';\n\nlet token = '';\ntry {\n    const tokenResp = await this.helpers.httpRequest({\n        method: 'POST', url: 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',\n        headers: { 'Content-Type': 'application/json' },\n        body: { app_id: APP_ID, app_secret: APP_SECRET }, timeout: 10000\n    });\n    token = tokenResp.tenant_access_token;\n} catch (e) {\n    return [{ json: { error: 'Token获取失败', translated: 0 } }];\n}\n\nconst todayStart = new Date(date).getTime();\nconst todayEnd = todayStart + 86400000;\n\nlet records = [];\ntry {\n    const recordsResp = await this.helpers.httpRequest({\n        method: 'GET', url: `https://open.feishu.cn/open-apis/bitable/v1/apps/${bitableApp}/tables/${bitableTable}/records?page_size=100`,\n        headers: { 'Authorization': `Bearer ${token}` }, timeout: 10000\n    });\n    records = recordsResp.data?.items || [];\n} catch (e) {\n    return [{ json: { error: '获取记录失败', translated: 0 } }];\n}\n\nconst toTranslate = records.filter(rec => {\n    const pullDate = rec.fields?.['拉取日期'];\n    const cnDesc = rec.fields?.['中文描述'];\n    return pullDate >= todayStart && pullDate < todayEnd && (!cnDesc || cnDesc === '');\n});\n\nif (toTranslate.length === 0) {\n    return [{ json: { message: '无需翻译', translated: 0 } }];\n}\n\nconst batchSize = 10;\nconst updateBatch = [];\n\nfor (let i = 0; i < toTranslate.length; i += batchSize) {\n    const batch = toTranslate.slice(i, i + batchSize);\n    const descs = batch.map(rec => (rec.fields?.['描述'] || '').substring(0, 150));\n    const prompt = '将以下' + batch.length + '个项目描述翻译成中文。规则：' + '\\n' + '1. 通顺易懂，50字内' + '\\n' + '2. 保留技术术语' + '\\n' + '3. 每行一个翻译结果，不要编号' + '\\n' + '\\n' + '待翻译：' + '\\n' + descs.map((d, idx) => (idx+1) + '. ' + d).join('\\n') + '\\n' + '\\n' + '翻译结果：';\n    try {\n        const response = await this.helpers.httpRequest({\n            method: 'POST', url: `http://${$env.N8N_01_OLLAMA_HOST || 'localhost'}:${$env.N8N_01_OLLAMA_PORT || '11434'}/v1/chat/completions`,\n            headers: { 'Content-Type': 'application/json' },\n            body: { model: 'qwen2.5:3b', messages: [{ role: 'system', content: '你是项目描述翻译助手。' }, { role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1500, stream: false }, timeout: 120000\n        });\n        const content = response.choices?.[0]?.message?.content || '';\n        const lines = content.split('\\n').map(l => l.replace(/^\\d+[\\.\\s]+/, '').trim()).filter(l => l.length > 0);\n        const matchCount = Math.min(batch.length, lines.length);\n        for (let j = 0; j < matchCount; j++) {\n            if (lines[j]) updateBatch.push({ record_id: batch[j].record_id, fields: { '中文描述': lines[j] } });\n        }\n    } catch (e) {\n        console.log('翻译批次错误: ' + e.message);\n    }\n}\n\nif (updateBatch.length > 0) {\n    try {\n        await this.helpers.httpRequest({\n            method: 'POST', url: `https://open.feishu.cn/open-apis/bitable/v1/apps/${bitableApp}/tables/${bitableTable}/records/batch_update`,\n            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },\n            body: { records: updateBatch }, timeout: 30000\n        });\n    } catch (e) {\n        console.log('更新表格错误: ' + e.message);\n    }\n}\n\nreturn [{ json: { message: '异步翻译完成', translated: updateBatch.length } }];"
+      },
+      "id": "251fff5d-593c-4f6f-8edb-88b30f4fe19f",
+      "name": "异步翻译更新",
+      "position": [
+        1440,
+        304
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/search/repositories",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ 'created:>' + new Date(Date.now() - 7*86400000).toISOString().slice(0,10) + ' (llm OR ai OR agent OR mcp OR claude OR agentic) stars:>100' }}"
+            },
+            {
+              "name": "sort",
+              "value": "stars"
+            },
+            {
+              "name": "order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "30"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "github_trending_api",
+      "name": "GitHub Trending搜索",
+      "position": [
+        0,
+        560
+      ],
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst status = resp.statusCode || 0;\nconst body = resp.data || resp.body || {};\nconst config = $('初始化配置').first().json;\n\nif (status !== 200 || !body.items) {\n    return [{ json: { items: [], error: `HTTP ${status}`, date: config.date } }];\n}\n\nconst items = body.items.map(repo => ({\n    name: repo.full_name,\n    stars: repo.stargazers_count,\n    description: (repo.description || '').substring(0, 200),\n    url: repo.html_url,\n    createdAt: repo.created_at,\n    language: repo.language || 'N/A',\n    topics: (repo.topics || []).join(', ')\n}));\n\nconst uniqueMap = new Map();\nitems.forEach(item => { if (!uniqueMap.has(item.name)) uniqueMap.set(item.name, item); });\nconst uniqueItems = Array.from(uniqueMap.values());\n\nreturn [{ json: { items: uniqueItems, totalFound: body.total_count, uniqueCount: uniqueItems.length, date: config.date, feishuWebhook: config.feishuWebhook, bitableApp: config.bitableApp, bitableTable: config.bitableTable } }];"
+      },
+      "id": "trending_data_clean",
+      "name": "新锐数据清洗",
+      "position": [
+        240,
+        560
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst items = data.items || [];\nconst topItems = items.slice(0, 8);\nconst descs = topItems.map(i => (i.description || '').substring(0, 150)).filter(d => d.length > 10 && /[a-zA-Z]/.test(d));\n\nlet translationOk = true;\nlet translationError = '';\n\nif (descs.length === 0) {\n    topItems.forEach(i => { i.descriptionCn = i.description || '' });\n    return [{ json: { ...data, items: topItems, translationOk: true, translationError: '', translatedCount: 0, totalToTranslate: 0 } }];\n}\n\nconst batchSize = 10;\nconst translatedMap = {};\n\nfor (let i = 0; i < descs.length; i += batchSize) {\n    const batch = descs.slice(i, i + batchSize);\n    const prompt = '将以下' + batch.length + '个项目描述翻译成中文。规则：\\n1. 通顺易懂，50字内\\n2. 保留技术术语\\n3. 每行一个翻译结果，不要编号\\n\\n待翻译：\\n' + batch.map((d, idx) => (idx+1) + '. ' + d).join('\\n') + '\\n\\n翻译结果：';\n    try {\n        const response = await this.helpers.httpRequest({\n            method: 'POST', url: `http://${$env.N8N_01_OLLAMA_HOST || 'localhost'}:${$env.N8N_01_OLLAMA_PORT || '11434'}/v1/chat/completions`,\n            headers: { 'Content-Type': 'application/json' },\n            body: { model: 'qwen2.5:3b', messages: [{ role: 'system', content: '你是项目描述翻译助手。' }, { role: 'user', content: prompt }], temperature: 0.1, max_tokens: 1500, stream: false }, timeout: 120000\n        });\n        const content = response.choices?.[0]?.message?.content || '';\n        const lines = content.split('\\n').map(l => l.replace(/^\\d+[\\.\\s]+/, '').trim()).filter(l => l.length > 0);\n        const matchCount = Math.min(batch.length, lines.length);\n        for (let j = 0; j < matchCount; j++) {\n            if (lines[j]) translatedMap[batch[j]] = lines[j];\n        }\n    } catch (e) {\n        translationOk = false;\n        translationError = e.message;\n    }\n}\n\ntopItems.forEach(item => {\n    const desc = item.description || '';\n    item.descriptionCn = translatedMap[desc] || desc;\n});\n\nreturn [{ json: { ...data, items: topItems, translationOk, translationError, translatedCount: Object.keys(translatedMap).length, totalToTranslate: descs.length } }];"
+      },
+      "id": "trending_sync_translate",
+      "name": "同步翻译(新锐)",
+      "position": [
+        368,
+        560
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst items = data.items || [];\n\nif (items.length === 0) {\n    return [{ json: { ...data, writeCount: 0, tokenOk: true } }];\n}\n\nconst APP_ID = $env.N8N_01_FEISHU_APP_ID || 'YOUR_N8N_01_FEISHU_APP_ID';\nconst APP_SECRET = $env.N8N_01_FEISHU_APP_SECRET || 'YOUR_N8N_01_FEISHU_APP_SECRET';\nconst TRENDING_TABLE = $env.N8N_01_FEISHU_TABLE_TRENDING || 'YOUR_N8N_01_FEISHU_TABLE_TRENDING';\n\nlet token = '';\ntry {\n    const tokenResp = await this.helpers.httpRequest({\n        method: 'POST', url: 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',\n        headers: { 'Content-Type': 'application/json' },\n        body: { app_id: APP_ID, app_secret: APP_SECRET }, timeout: 10000\n    });\n    token = tokenResp.tenant_access_token;\n} catch (e) {\n    return [{ json: { ...data, error: 'Token获取失败: ' + e.message, writeCount: 0, tokenOk: false } }];\n}\nif (!token) return [{ json: { ...data, error: 'Token为空', writeCount: 0, tokenOk: false } }];\n\nconst records = items.map(item => ({\n    fields: {\n        '项目名': item.name, 'Stars': item.stars, '描述': item.description,\n        '中文描述': item.descriptionCn || '', '链接': { text: item.name, link: item.url },\n        '语言': item.language, '创建日期': new Date(item.createdAt).getTime(), '拉取日期': new Date(data.date).getTime()\n    }\n}));\n\nlet writeResult = null;\ntry {\n    writeResult = await this.helpers.httpRequest({\n        method: 'POST',\n        url: `https://open.feishu.cn/open-apis/bitable/v1/apps/${data.bitableApp}/tables/${TRENDING_TABLE}/records/batch_create`,\n        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },\n        body: { records }, timeout: 60000\n    });\n} catch (e) {\n    return [{ json: { ...data, error: '写入失败: ' + e.message, writeCount: 0, tokenOk: true } }];\n}\n\nconst writeCount = writeResult?.data?.records?.length || 0;\nreturn [{ json: { ...data, bitableResult: writeResult, writeCount, tokenOk: true } }];"
+      },
+      "id": "write_trending_bitable",
+      "name": "写入新锐表",
+      "position": [
+        480,
+        560
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst config = $('初始化配置').first().json;\nconst items = data.items || [];\nconst date = config.date;\nconst feishuWebhook = config.feishuWebhook;\n\n// 计算耗时\nconst startTime = config.startTime || Date.now();\nconst elapsed = Math.round((Date.now() - startTime) / 1000);\nconst elapsedStr = elapsed >= 60 ? Math.floor(elapsed/60) + '分' + (elapsed%60) + '秒' : elapsed + '秒';\n\nconst transOk = data.translationOk !== false;\nconst transCount = data.translatedCount || 0;\nconst transTotal = data.totalToTranslate || 0;\nconst transErr = data.translationError || '';\nconst writeOk = data.tokenOk !== false;\nconst writeCount = data.writeCount || 0;\nconst writeErr = data.error || '';\n\nlet md = '';\nif (!writeOk) md += '⚠️ **表格写入失败**: ' + writeErr + '\\n\\n';\nif (!transOk && transTotal > 0) md += '⚠️ **翻译服务异常**: ' + transErr.substring(0, 80) + '\\n   已翻译 ' + transCount + '/' + transTotal + ' 条\\n\\n';\n\nmd += '**📊 本周新锐概览**\\n';\nmd += '· 新发现: **' + items.length + '** 个 · 写入: ' + (writeOk ? '✅ ' + writeCount : '❌') + ' · 翻译: ' + (transOk ? '✅ ' + transCount + '/' + transTotal : '⚠️ ' + transCount + '/' + transTotal) + '\\n';\nmd += '· 耗时: ' + elapsedStr + '\\n\\n';\n\nif (items.length > 0) {\n    md += '**🚀 热门新项目**\\n\\n';\n    items.slice(0, 8).forEach((item, i) => {\n        const desc = (item.descriptionCn || item.description || '').substring(0, 60);\n        const daysAgo = Math.floor((new Date() - new Date(item.createdAt)) / 86400000);\n        const lang = item.language !== 'N/A' ? ' `' + item.language + '`' : '';\n        md += (i+1) + '. **[' + item.name + '](' + item.url + ')** ⭐' + item.stars.toLocaleString() + ' · +' + daysAgo + '天' + lang + '\\n   ' + desc + '\\n';\n    });\n}\n\nmd += '\\n---\\n📅 ' + date;\n\nconst payload = {\n    msg_type: 'interactive',\n    card: {\n        schema: '2.0',\n        config: { wide_screen_mode: true },\n        header: {\n            title: { tag: 'plain_text', content: '🚀 新锐 AI 项目 ' + date },\n            template: 'violet'\n        },\n        body: { elements: [{ tag: 'markdown', content: md }] }\n    }\n};\n\ntry {\n    await this.helpers.httpRequest({ method: 'POST', url: feishuWebhook, headers: { 'Content-Type': 'application/json' }, body: payload, timeout: 10000 });\n    return [{ json: { message: '新锐通知已发送', count: items.length, date, elapsed: elapsedStr } }];\n} catch (e) {\n    return [{ json: { error: '通知发送失败: ' + e.message, date } }];\n}"
+      },
+      "id": "send_trending_feishu",
+      "name": "发送飞书通知(新锐)",
+      "position": [
+        720,
+        560
+      ],
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "GitHub Trending Webhook": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "初始化配置",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "每日9点触发": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "初始化配置",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "手动触发": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "初始化配置",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "初始化配置": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "GitHub Search API",
+            "type": "main"
+          },
+          {
+            "index": 0,
+            "node": "GitHub Trending搜索",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub Search API": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "数据清洗与分类",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "数据清洗与分类": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "同步翻译(通知用)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "同步翻译(通知用)": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "写入飞书多维表格",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "写入飞书多维表格": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "发送飞书通知(经典)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "发送飞书通知(经典)": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "异步翻译更新",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "GitHub Trending搜索": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "新锐数据清洗",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "新锐数据清洗": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "同步翻译(新锐)",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "同步翻译(新锐)": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "写入新锐表",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "写入新锐表": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "发送飞书通知(新锐)",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "e032c93e-0181-47e2-9273-f0b0d4ba2319",
+  "meta": {
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "cD9h2OAuFYLkJzCb",
+  "tags": []
+}

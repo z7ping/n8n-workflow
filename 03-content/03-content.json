@@ -1,0 +1,361 @@
+{
+  "name": "自媒体内容分析 - 高级版 (改进版)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "content-analyze-advanced",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "content-analyze-advanced"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 验证输入并构建 Prompt\nconst title = $input.body?.title || '';\nconst content = $input.body?.content || '';\nconst model = $input.body?.model || 'qwen2.5:3b';\nconst temperature = $input.body?.temperature || 0.7;\n\nif (!title && !content) {\n  throw new Error('请提供标题或内容');\n}\n\nconst prompt = `你是一位资深的自媒体内容策略专家，精通内容运营和平台算法。\n\n请分析以下自媒体内容，按照\"五层分类体系\"进行深度分析。\n\n## 待分析内容\n\n标题：${title}\n\n正文：\n${content}\n\n## 五层分类体系说明\n\n1. **流量层**（获取曝光）\n   - 情绪共鸣型：引发情感共鸣，激发转发\n   - 观点对立型：制造争议讨论\n   - 反常识型：打破认知，颠覆常识\n   - 热点型：追热点借势\n\n2. **理解层**（建立认知）\n   - 知识科普型：传递知识，解答疑惑\n   - 深度分析型：深入剖析，提供洞察\n   - 方法论型：系统方法，可复用\n\n3. **连接层**（建立信任）\n   - 人格/IP型：展现个人魅力，建立人设\n   - 日常表达型：真实表达，拉近距离\n   - 成长记录型：展示成长，激励他人\n\n4. **包装层**（提升传播）\n   - 故事型：用故事包装信息\n   - 案例拆解型：具体案例，可借鉴\n   - 叙事型：情节化叙述\n\n5. **转化层**（变现能力）\n   - 工具型：直接解决问题\n   - 模板型：可直接使用\n   - 清单型：便于收藏\n\n## 请严格按照以下格式输出分析结果\n\n【主要类型】xxx层 - xxx型\n\n【五层得分】（满分10分）\n- 流量层：x/10\n- 理解层：x/10\n- 连接层：x/10\n- 包装层：x/10\n- 转化层：x/10\n\n【内容特征】\n1. 特征描述\n2. 特征描述\n3. 特征描述\n\n【策略建议】\n1. 具体建议\n2. 具体建议\n3. 具体建议\n\n【优化建议】\n1. 优化点\n2. 优化点\n3. 优化点\n\n【推荐平台】\n1. 平台名称（选择原因）\n2. 平台名称（选择原因）\n3. 平台名称（选择原因）\n\n【改写建议】\n标题优化：优化后的标题建议\n开头优化：开头段落优化建议\n正文优化：正文内容优化建议\n结尾优化：结尾段落优化建议\n\n【平台适配】\n小红书：针对小红书的适配建议\n抖音：针对抖音的适配建议\n知乎：针对知乎的适配建议\n\n请确保分析深入、具体、可操作。`;\n\nreturn [{\n  json: {\n    model: model,\n    prompt: prompt,\n    stream: false,\n    options: {\n      temperature: temperature,\n      num_predict: 4000\n    },\n    originalData: {\n      title: title,\n      content: content,\n      model: model,\n      temperature: temperature\n    }\n  }\n}];"
+      },
+      "id": "build-prompt",
+      "name": "构建Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "={{ $json.model }}"
+            },
+            {
+              "name": "prompt",
+              "value": "={{ $json.prompt }}"
+            },
+            {
+              "name": "stream",
+              "value": "=false"
+            },
+            {
+              "name": "options",
+              "value": "={{ $json.options }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "call-ollama",
+      "name": "调用Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        650,
+        300
+      ],
+      "continueOnFail": true,
+      "errorOutput": "error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 解析 Ollama 返回的文本\nconst response = $input.first().json.response;\nconst originalData = $input.first().json.originalData;\n\n// 辅助函数\nfunction extractSection(text, marker) {\n  const regex = new RegExp(marker + '([\\s\\S]*?)(?=【|$)');\n  const match = text.match(regex);\n  return match ? match[1].trim() : '';\n}\n\nfunction extractScore(text, layer) {\n  const regex = new RegExp(layer + '[：:]\\\\s*(\\\\d+)\\\\s*/\\\\s*10');\n  const match = text.match(regex);\n  return match ? parseInt(match[1]) : 0;\n}\n\nfunction extractList(text, marker) {\n  const section = extractSection(text, marker);\n  return section\n    .split('\\n')\n    .map(line => line.trim())\n    .filter(line => /^\\d+[.．、]/.test(line))\n    .map(line => line.replace(/^\\d+[.．、]\\s*/, '').trim())\n    .filter(item => item.length > 0);\n}\n\nfunction extractPlatforms(text) {\n  const section = extractSection(text, '【推荐平台】');\n  const lines = section\n    .split('\\n')\n    .map(line => line.trim())\n    .filter(line => /^\\d+[.．、]/.test(line));\n\n  return lines.map(line => {\n    const match = line.match(/^\\d+[.．、]\\s*(.+?)[（(](.+?)[)）]/);\n    if (match) {\n      return { name: match[1].trim(), reason: match[2].trim() };\n    }\n    const nameMatch = line.match(/^\\d+[.．、]\\s*(.+)/);\n    return { name: nameMatch ? nameMatch[1].trim() : line, reason: '' };\n  });\n}\n\nfunction extractRewrite(text) {\n  const section = extractSection(text, '【改写建议】');\n  const result = {};\n\n  const patterns = [\n    ['title', /标题优化[：:]\\s*([\\s\\S]*?)(?=开头优化|$)/],\n    ['hook', /开头优化[：:]\\s*([\\s\\S]*?)(?=正文优化|$)/],\n    ['body', /正文优化[：:]\\s*([\\s\\S]*?)(?=结尾优化|$)/],\n    ['ending', /结尾优化[：:]\\s*([\\s\\S]*?)(?=【|$)/]\n  ];\n  for (const [key, pat] of patterns) {\n    const m = section.match(pat);\n    result[key] = m ? m[1].trim() : '';\n  }\n  return result;\n}\n\nfunction extractPlatformAdaptation(text) {\n  const section = extractSection(text, '【平台适配】');\n  const result = {};\n  const lines = section.split('\\n');\n  for (const line of lines) {\n    const match = line.match(/^([^：:]+)[：:]\\s*(.+)$/);\n    if (match) {\n      result[match[1].trim()] = match[2].trim();\n    }\n  }\n  return result;\n}\n\n// 主解析\nconst primaryMatch = response.match(/【主要类型】(.+?)\\n/);\nconst primaryRaw = primaryMatch ? primaryMatch[1].trim() : '';\nconst layerTypeMatch = primaryRaw.match(/(.+?)层\\s*[-—]\\s*(.+)/);\n\nconst primaryLayer = layerTypeMatch ? layerTypeMatch[1].trim() : primaryRaw;\nconst primaryType = layerTypeMatch ? layerTypeMatch[2].trim() : '';\n\nconst scores = {\n  traffic: extractScore(response, '流量层'),\n  understanding: extractScore(response, '理解层'),\n  connection: extractScore(response, '连接层'),\n  packaging: extractScore(response, '包装层'),\n  conversion: extractScore(response, '转化层')\n};\nconst overallScore = Object.values(scores).reduce((a, b) => a + b, 0);\n\nconst result = {\n  id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),\n  timestamp: new Date().toISOString(),\n  input: {\n    title: originalData.title,\n    content: originalData.content,\n    contentLength: originalData.content.length,\n    model: originalData.model,\n    temperature: originalData.temperature\n  },\n  analysis: {\n    primaryLayer: primaryLayer,\n    primaryType: primaryType,\n    scores: scores,\n    overallScore: overallScore,\n    characteristics: extractList(response, '【内容特征】'),\n    suggestions: extractList(response, '【策略建议】'),\n    optimizationTips: extractList(response, '【优化建议】'),\n    recommendedPlatforms: extractPlatforms(response),\n    rewrite: extractRewrite(response),\n    platformAdaptation: extractPlatformAdaptation(response)\n  },\n  rawResponse: response\n};\n\nreturn [{ json: result }];"
+      },
+      "id": "parse-result",
+      "name": "解析结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "content_analysis",
+        "columns": {
+          "mapping": [
+            {
+              "column": "id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "column": "title",
+              "value": "={{ $json.input.title }}"
+            },
+            {
+              "column": "content_preview",
+              "value": "={{ $json.input.content }}"
+            },
+            {
+              "column": "content_length",
+              "value": "={{ $json.input.contentLength }}"
+            },
+            {
+              "column": "model",
+              "value": "={{ $json.input.model }}"
+            },
+            {
+              "column": "temperature",
+              "value": "={{ $json.input.temperature }}"
+            },
+            {
+              "column": "primary_layer",
+              "value": "={{ $json.analysis.primaryLayer }}"
+            },
+            {
+              "column": "primary_type",
+              "value": "={{ $json.analysis.primaryType }}"
+            },
+            {
+              "column": "score_traffic",
+              "value": "={{ $json.analysis.scores.traffic }}"
+            },
+            {
+              "column": "score_understanding",
+              "value": "={{ $json.analysis.scores.understanding }}"
+            },
+            {
+              "column": "score_connection",
+              "value": "={{ $json.analysis.scores.connection }}"
+            },
+            {
+              "column": "score_packaging",
+              "value": "={{ $json.analysis.scores.packaging }}"
+            },
+            {
+              "column": "score_conversion",
+              "value": "={{ $json.analysis.scores.conversion }}"
+            },
+            {
+              "column": "overall_score",
+              "value": "={{ $json.analysis.overallScore }}"
+            },
+            {
+              "column": "characteristics",
+              "value": "={{ JSON.stringify($json.analysis.characteristics) }}"
+            },
+            {
+              "column": "suggestions",
+              "value": "={{ JSON.stringify($json.analysis.suggestions) }}"
+            },
+            {
+              "column": "optimization_tips",
+              "value": "={{ JSON.stringify($json.analysis.optimizationTips) }}"
+            },
+            {
+              "column": "recommended_platforms",
+              "value": "={{ JSON.stringify($json.analysis.recommendedPlatforms) }}"
+            },
+            {
+              "column": "rewrite_title",
+              "value": "={{ $json.analysis.rewrite.title }}"
+            },
+            {
+              "column": "rewrite_hook",
+              "value": "={{ $json.analysis.rewrite.hook }}"
+            },
+            {
+              "column": "rewrite_body",
+              "value": "={{ $json.analysis.rewrite.body }}"
+            },
+            {
+              "column": "rewrite_ending",
+              "value": "={{ $json.analysis.rewrite.ending }}"
+            },
+            {
+              "column": "platform_xiaohongshu",
+              "value": "={{ $json.analysis.platformAdaptation['小红书'] || '' }}"
+            },
+            {
+              "column": "platform_douyin",
+              "value": "={{ $json.analysis.platformAdaptation['抖音'] || '' }}"
+            },
+            {
+              "column": "platform_zhihu",
+              "value": "={{ $json.analysis.platformAdaptation['知乎'] || '' }}"
+            },
+            {
+              "column": "raw_response",
+              "value": "={{ $json.rawResponse }}"
+            },
+            {
+              "column": "created_at",
+              "value": "={{ $json.timestamp }}"
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "id": "save-to-db",
+      "name": "保存到数据库",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [
+        1050,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      },
+      "continueOnFail": true,
+      "errorOutput": "error"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 格式化最终输出\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    success: true,\n    data: {\n      id: data.id,\n      analysis: data.analysis,\n      timestamp: data.timestamp\n    },\n    message: '分析完成并已保存'\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "格式化响应",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 生成运行 ID\nconst runId = Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 8);\nconst startTime = new Date().toISOString();\n\nreturn [{\n  json: {\n    runId: runId,\n    startTime: startTime,\n    status: 'started',\n    input: {\n      title: $input.body?.title || '',\n      content: $input.body?.content || ''\n    }\n  }\n}];"
+      },
+      "id": "init-run",
+      "name": "初始化运行",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        450
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 处理失败\nconst runId = $input.first().json.runId || 'unknown';\nconst error = $json.error || '未知错误';\nconst timestamp = new Date().toISOString();\n\nconst failureLog = {\n  runId: runId,\n  step: 'call-ollama-or-db',\n  error: error,\n  timestamp: timestamp,\n  status: 'failed',\n  needsReview: true\n};\n\nreturn [{\n  json: {\n    message: '处理失败，已添加到审核队列',\n    failure: failureLog\n  }\n}];"
+      },
+      "id": "handle-error",
+      "name": "错误处理",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 记录成功运行日志\nconst runId = $input.first().json.runId || 'unknown';\nconst endTime = new Date().toISOString();\n\nconst successLog = {\n  runId: runId,\n  endTime: endTime,\n  status: 'success',\n  timestamp: endTime\n};\n\nreturn [{\n  json: {\n    message: '分析完成并保存到数据库',\n    log: successLog\n  }\n}];"
+      },
+      "id": "log-success",
+      "name": "记录成功日志",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        450
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "构建Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "构建Prompt": {
+      "main": [
+        [
+          {
+            "node": "调用Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "调用Ollama": {
+      "main": [
+        [
+          {
+            "node": "解析结果",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "错误处理",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "解析结果": {
+      "main": [
+        [
+          {
+            "node": "保存到数据库",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "保存到数据库": {
+      "main": [
+        [
+          {
+            "node": "格式化响应",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "错误处理",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "content-analysis",
+    "advanced",
+    "improved"
+  ],
+  "active": false
+}
