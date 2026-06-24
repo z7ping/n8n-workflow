@@ -239,7 +239,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 从准备飞书消息节点获取原始数据\\nconst origData = $('准备飞书消息').first().json;\\nconst date = origData?.date || '未知日期';\\nconst totalItems = origData?.totalItems || 0;\\nconst errorCount = origData?.errorCount || 0;\\n\\n// 从当前输入获取飞书响应\\nconst feishuResp = $input.first().json;\\nlet feishuStatus = '未执行';\\nif (feishuResp) {\\n    const code = feishuResp.code ?? feishuResp.StatusCode;\\n    if (code === 0) feishuStatus = '✅ 发送成功';\\n    else if (code !== undefined) feishuStatus = `❌ API错误: ${code}`;\\n    else if (feishuResp.statusCode) feishuStatus = feishuResp.statusCode === 200 ? '✅ 发送成功' : `❌ HTTP错误: ${feishuResp.statusCode}`;\\n}\\n\\nreturn [{ json: { message: `✅ 日报生成完成: ${date}`, totalItems, errors: errorCount > 0 ? `${errorCount}个数据源失败` : '无', feishuStatus } }];"
+        "jsCode": "// 从初始化配置获取日期\\nconst initConfig = $('初始化配置').first().json;\\nconst date = initConfig?.date || '未知日期';\\n\\n// 从格式化日报获取统计\\nconst formatData = $('格式化日报').first().json;\\nconst totalItems = formatData?.totalItems || 0;\\nconst errorCount = formatData?.errorCount || 0;\\n\\n// 从当前输入获取飞书响应\\nconst feishuResp = $input.first().json;\\nlet feishuStatus = '未执行';\\nif (feishuResp) {\\n    const code = feishuResp.code ?? feishuResp.StatusCode;\\n    if (code === 0) feishuStatus = '✅ 发送成功';\\n    else if (code !== undefined) feishuStatus = `❌ API错误: ${code}`;\\n    else if (feishuResp.statusCode) feishuStatus = feishuResp.statusCode === 200 ? '✅ 发送成功' : `❌ HTTP错误: ${feishuResp.statusCode}`;\\n}\\n\\nreturn [{ json: { message: `✅ 日报生成完成: ${date}`, totalItems, errors: errorCount > 0 ? `${errorCount}个数据源失败` : '无', feishuStatus } }];"
       },
       "id": "64c1ce74-a7da-49c7-9352-99e3b72a00cb",
       "name": "输出结果",
