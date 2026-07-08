@@ -57,7 +57,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const today = new Date().toISOString().slice(0, 10);\nconst FEISHU_WEBHOOK = $env.N8N_01_FEISHU_WEBHOOK || 'https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_N8N_01_FEISHU_WEBHOOK';\nconst BITABLE_APP = $env.N8N_01_FEISHU_BITABLE_ID || 'YOUR_N8N_01_FEISHU_BITABLE_ID';\nconst BITABLE_TABLE = $env.N8N_01_FEISHU_TABLE_CLASSIC || 'YOUR_N8N_01_FEISHU_TABLE_CLASSIC';\nconst startTime = Date.now();\nreturn [{ json: { date: today, feishuWebhook: FEISHU_WEBHOOK, bitableApp: BITABLE_APP, bitableTable: BITABLE_TABLE, startTime } }];"
+          "jsCode": "const today = new Date().toISOString().slice(0, 10);\nconst FEISHU_WEBHOOK = $env.N8N_01_FEISHU_WEBHOOK || 'YOUR_N8N_01_FEISHU_WEBHOOK';\nconst BITABLE_APP = $env.N8N_01_FEISHU_BITABLE_ID || 'YOUR_N8N_01_FEISHU_BITABLE_ID';\nconst BITABLE_TABLE = $env.N8N_01_FEISHU_TABLE_CLASSIC || 'YOUR_N8N_01_FEISHU_TABLE_CLASSIC';\nconst GITHUB_TOKEN = $env.N8N_01_GITHUB_TOKEN || '';\nconst startTime = Date.now();\nreturn [{ json: { date: today, feishuWebhook: FEISHU_WEBHOOK, bitableApp: BITABLE_APP, bitableTable: BITABLE_TABLE, githubToken: GITHUB_TOKEN, startTime } }];"
         },
         "id": "config",
         "name": "\u521d\u59cb\u5316\u914d\u7f6e",
@@ -106,7 +106,7 @@
             "parameters": [
               {
                 "name": "Authorization",
-                "value": "token {{ $env.N8N_01_GITHUB_TOKEN }}"
+                "value": "=Bearer {{ $('\u521d\u59cb\u5316\u914d\u7f6e').first().json.githubToken }}"
               }
             ]
           }
@@ -224,7 +224,7 @@
             "parameters": [
               {
                 "name": "Authorization",
-                "value": "token {{ $env.N8N_01_GITHUB_TOKEN }}"
+                "value": "=Bearer {{ $('\u521d\u59cb\u5316\u914d\u7f6e').first().json.githubToken }}"
               }
             ]
           }
