@@ -9,6 +9,13 @@
 | 01 | [github-trending](./01-github-trending/) | GitHub Trending 每日抓取，AI 翻译摘要，写入飞书多维表格 | 定时/Webhook | ✅ 运行中 |
 | 02 | [tech-crunch](./02-tech-crunch/) | 科技资讯日报（TechCrunch/HackerNews/ProductHunt），飞书通知 | 定时触发 | ✅ 运行中 |
 | 03 | [content](./03-content/) | 自媒体内容分析工作流（Webhook/手动/定时三种模式） | 手动/Webhook/定时 | ✅ 可用 |
+| 04 | [vikunja-to-feishu](./04-vikunja-to-feishu/) | Vikunja 任务事件推送飞书群 | Webhook | ✅ 运行中 |
+| 05 | [focuslist-build](./05-focuslist-build/) | FocusList 拉取最新代码并打包 | 手动/定时 | ✅ 运行中 |
+| 06 | [focuslist-apk](./06-focuslist-apk/) | FocusList 推送 APK 到手机 | 手动 | ✅ 运行中 |
+| 07 | [focuslist-start](./07-focuslist-start/) | FocusList 启动 155 机器 go 服务 | 手动 | ✅ 运行中 |
+| 08 | [news-daily](./08-news-daily/) | 新闻联播日报（CCTV 新闻联播，飞书通知） | 定时触发 | ✅ 运行中 |
+| 09 | [obsidian-daily](./09-obsidian-daily/) | Obsidian 知识每日推送（Gitea Wiki → 飞书） | 定时触发 | ⏸ 未激活 |
+| 10 | [ntfy-push](./10-ntfy-push/) | ntfy 推送通知（通用） | Webhook/手动 | ⏸ 未激活 |
 
 ## ⚡ 快速开始
 
