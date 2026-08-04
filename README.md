@@ -14,6 +14,13 @@
 | 06 | [obsidian-daily](./06-obsidian-daily/) | Obsidian 知识每日推送（Gitea Wiki → 飞书） | 定时触发 | ⏸ 未激活 |
 | 07 | [ntfy-push](./07-ntfy-push/) | ntfy 推送通知（通用） | Webhook/手动 | ⏸ 未激活 |
 
+## 📌 版本管理
+
+- 版本号由 **git tag** 管理（语义化版本，如 `v1.0.0`）
+- 变更说明由各目录 **CHANGELOG.md** 记录
+- 备份流程：改服务器工作流 → 导出 JSON 更新仓库 → commit → tag → push（Gitea + GitHub）
+- n8n 内部 `versionCounter` 是编辑次数，非版本号，不用于版本管理
+
 ## ⚡ 快速开始
 
 ### 1. 安装 n8n
