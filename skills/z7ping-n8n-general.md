@@ -60,7 +60,7 @@ N8N_XX_服务_用途
 | `N8N_01_FEISHU_APP_SECRET` | 飞书应用 App Secret | `xxxxx` |
 | `N8N_01_FEISHU_WEBHOOK` | 飞书通知 Webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/xxx` |
 | `N8N_01_FEISHU_BITABLE_TOKEN` | 多维表格 App Token | `xxxxx` |
-| `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | `192.168.31.102` |
+| `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | `your_ollama_host` |
 | `N8N_01_OLLAMA_PORT` | Ollama 服务端口 | `11434` |
 
 #### 分支专用变量
@@ -149,7 +149,7 @@ z7ping-n8n-workflow/
 | 飞书 App ID | `cli_xxxxx` | `.env` |
 | 飞书 App Secret | `xxxxx` | `.env` |
 | 飞书 Webhook URL | `https://...` | `.env` |
-| Ollama 地址 | `192.168.31.102` | `.env` |
+| Ollama 地址 | `your_ollama_host` | `.env` |
 | 数据库密码 | `xxxxx` | `.env` |
 
 ---

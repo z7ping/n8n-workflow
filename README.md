@@ -60,7 +60,7 @@ docker exec n8n n8n import:workflow --input=/path/to/workflow.json
 | `N8N_01_FEISHU_BITABLE_TOKEN` | 飞书多维表格 App Token | - |
 | `N8N_01_FEISHU_TABLE_CLASSIC` | 经典项目表 ID | `tbldsiHgdoDx92xo` |
 | `N8N_01_FEISHU_TABLE_TRENDING` | 新锐项目表 ID | `tbl3R17M2jNsUDgY` |
-| `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | `192.168.31.102` |
+| `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | `your_ollama_host` |
 | `N8N_01_OLLAMA_PORT` | Ollama 服务端口 | `11434` |
 
 详细命名规范见 [skills/z7ping-n8n-general.md](./skills/z7ping-n8n-general.md)
