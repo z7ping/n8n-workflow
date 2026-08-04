@@ -58,13 +58,16 @@
 
 ## 环境变量
 
-在 n8n 中设置以下环境变量：
+在 n8n 中设置以下环境变量（实际使用 `N8N_01_*` 前缀，与 GitHub Trending 共用）：
 
 | 变量名 | 必填 | 说明 | 默认值 |
 |--------|------|------|--------|
-| `FEISHU_WEBHOOK` | ✅ | 飞书机器人 Webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_TOKEN` |
-| `OLLAMA_HOST` | ✅ | Ollama 服务地址 | `http://localhost` |
-| `OLLAMA_PORT` | ✅ | Ollama 服务端口 | `11434` |
+| `N8N_01_FEISHU_WEBHOOK` | ✅ | 飞书机器人 Webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_TOKEN` |
+| `N8N_01_OLLAMA_HOST` | ✅ | Ollama 服务地址 | `your_ollama_host` |
+| `N8N_01_OLLAMA_PORT` | ✅ | Ollama 服务端口 | `11434` |
+| `NTFY_URL` / `NTFY_TOPIC` / `NTFY_USER` / `NTFY_PASS` | ❌ | ntfy 推送（可选，配置后同步推 ntfy） | - |
+
+> **注意**：本工作流与 GitHub Trending（01）共用 `N8N_01_*` 环境变量，变量名不带独立序号前缀。
 
 ### 获取飞书 Webhook
 
@@ -78,13 +81,13 @@
 
 1. Ollama 已安装并运行：`ollama serve`
 2. 已拉取翻译用模型（如 `qwen2.5` 或 `qwen3`）：`ollama pull qwen2.5:7b`
-3. 服务监听在 `OLLAMA_HOST:OLLAMA_PORT`（默认 `http://localhost:11434`）
+3. 服务监听在 `N8N_01_OLLAMA_HOST:N8N_01_OLLAMA_PORT`（默认 `your_ollama_host:11434`）
 
 ## 导入步骤
 
 1. 打开 n8n 界面（默认 `http://localhost:5678`）
 2. 点击右上角菜单 → **Import from File**
-3. 选择 `科技资讯日报.json` 文件
+3. 选择 `02-tech-crunch.json` 文件
 4. 在工作流设置中配置环境变量（或在 n8n 的 `.env` 中设置）
 5. 点击 **Save** 保存工作流
 
@@ -92,7 +95,7 @@
 
 ### 首次配置
 
-1. **设置飞书 Webhook**：在 n8n 环境变量中配置 `FEISHU_WEBHOOK`
+1. **设置飞书 Webhook**：在 n8n 环境变量中配置 `N8N_01_FEISHU_WEBHOOK`
 2. **确认 Ollama 可用**：确保 Ollama 服务正常运行，模型已下载
 3. **测试运行**：点击「手动触发」节点运行，检查飞书群是否收到日报
 

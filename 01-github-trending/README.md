@@ -6,20 +6,20 @@
 - **执行超时:** 600秒 (10分钟)
 - **状态:** ✅ 运行中
 
-## 架构 (v4 — 串行，2026-07-06)
+## 架构 (v5 — 串行 + 双通道通知, 2026-08-04)
 
 ```
-触发器 → 初始化配置 → GitHub Search API → 清洗 → 同步翻译 → 写入经典表 → [已禁用]通知 → 异步翻译 → GitHub Trending搜索 → 新锐清洗 → 同步翻译(8条) → 写入新锐表 → 飞书通知(8条+耗时)
+触发器 → 初始化配置 → GitHub Search API(经典) → 清洗 → 同步翻译 → 写入经典表 → 飞书+ntfy通知 → GitHub Trending搜索(新锐) → 新锐清洗 → 同步翻译(8条) → 写入新锐表 → 飞书+ntfy通知(8条+耗时)
 ```
 
-**串行设计（v4）:**
-- 经典分支先跑完（含异步翻译更新）→ 新锐分支才开始
+**串行设计（v4 起）:**
+- 经典分支先跑完 → 新锐分支才开始
 - 两个 GitHub Search API 请求间隔几十秒，避免未认证 rate limit（10次/分钟）导致 403
 - v3 并行设计会导致两个 API 同时发出 → 触发 rate limit → 新锐分支 403
 
 **分支说明:**
-- **经典分支:** GitHub Search API `stars:>5000`，写入经典表，**不推送通知**（已禁用）
-- **新锐分支:** GitHub Search API `created:>7天 stars:>100`，翻译+写入新锐表，**推送飞书通知（8条）**
+- **经典分支:** GitHub Search API `stars:>5000`，写入经典表，**推送飞书+ntfy 通知**
+- **新锐分支:** GitHub Search API `created:>7天 stars:>100`，翻译+写入新锐表，**推送飞书+ntfy 通知（8条）**
 - 翻译失败不阻断流程，fallback 到英文原文
 
 ## 快速开始
@@ -52,6 +52,10 @@ vim .env
 | `N8N_01_FEISHU_TABLE_TRENDING` | 新锐项目表 ID | 同上 |
 | `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | 部署 Ollama 的机器 IP |
 | `N8N_01_OLLAMA_PORT` | Ollama 服务端口 | 默认 11434 |
+| `N8N_01_GITHUB_TOKEN` | GitHub API Token | GitHub Settings → Developer settings → PAT |
+| `NTFY_URL` | ntfy 服务地址 | 自建 ntfy 地址 |
+| `NTFY_TOPIC` | ntfy topic | 推送目标 topic |
+| `NTFY_USER` / `NTFY_PASS` | ntfy Basic Auth | 账号/密码 |
 
 ### 3. 注入环境变量到 n8n
 
@@ -120,6 +124,7 @@ ssh root@<n8n-server> "curl -s -m 120 http://localhost:5678/webhook/github-trend
 - 卡片颜色: 紫色 (violet)
 - 展示: 8个项目 + 翻译状态 + 写入状态 + 执行耗时
 - 每个项目显示: ⭐星数 · +天数 `语言` + 中文描述
+- 通知通道: 飞书 Webhook + ntfy（双通道推送）
 
 ## 常见问题
 

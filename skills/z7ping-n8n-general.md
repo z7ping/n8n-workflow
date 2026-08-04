@@ -46,9 +46,12 @@ N8N_XX_服务_用途
 | 序号 | 工作流名称 | 说明 |
 |------|------------|------|
 | 01 | GitHub Trending | GitHub 热门项目追踪 |
-| 02 | （待分配） | |
-| 03 | （待分配） | |
-| ... | ... | |
+| 02 | 科技资讯日报 | TechCrunch/HN/ProductHunt 资讯聚合（与 01 共用 N8N_01_* 变量） |
+| 03 | 自媒体内容分析 | 已下线，历史参考 |
+| 04 | Vikunja to Feishu | Vikunja 任务事件推送飞书 |
+| 05 | 新闻联播日报 | CCTV 新闻联播推送 |
+| 06 | Obsidian 知识推送 | Gitea Wiki → 飞书（未激活） |
+| 07 | ntfy 推送通知 | 通用 ntfy 推送（未激活） |
 
 ### GitHub Trending 工作流变量（01）
 
@@ -59,7 +62,7 @@ N8N_XX_服务_用途
 | `N8N_01_FEISHU_APP_ID` | 飞书应用 App ID | `cli_xxxxx` |
 | `N8N_01_FEISHU_APP_SECRET` | 飞书应用 App Secret | `xxxxx` |
 | `N8N_01_FEISHU_WEBHOOK` | 飞书通知 Webhook URL | `https://open.feishu.cn/open-apis/bot/v2/hook/xxx` |
-| `N8N_01_FEISHU_BITABLE_TOKEN` | 多维表格 App Token | `xxxxx` |
+| `N8N_01_FEISHU_BITABLE_ID` | 多维表格 App Token | `xxxxx` |
 | `N8N_01_OLLAMA_HOST` | Ollama 服务地址 | `your_ollama_host` |
 | `N8N_01_OLLAMA_PORT` | Ollama 服务端口 | `11434` |
 
@@ -178,16 +181,17 @@ z7ping-n8n-workflow/
 ### 部署流程
 
 1. **导出工作流**：从 N8N UI 导出 JSON
-2. **脱敏处理**：替换真实值为占位符
-3. **提交到 Git**：推送到 Gitea
+2. **脱敏处理**：替换真实值为占位符（或改为 `$env.XXX` 引用）
+3. **提交到 Git**：推送到 Gitea + GitHub 双端
 4. **导入到 N8N**：在 N8N UI 中导入 JSON
 5. **配置环境变量**：在 Docker 环境变量中配置真实值
 
 ### 版本管理
 
-1. **语义化版本**：使用 `v1.0.0` 格式
-2. **变更日志**：在 README.md 中记录重要变更
-3. **回滚机制**：保留历史版本的 JSON 文件
+1. **语义化版本**：使用 `v1.0.0` 格式，由 git tag 管理
+2. **变更日志**：各工作流目录 `CHANGELOG.md` 记录变更
+3. **回滚机制**：git checkout 历史版本标签恢复
+4. **同步推送**：Gitea + GitHub 双端推送（`git push origin main --tags && git push github main --tags`）
 
 ---
 
@@ -259,4 +263,4 @@ curl "https://api.github.com/search/repositories?q=created%3A%3E2026-01-01+stars
 
 ## 相关文档
 
-- [GitHub Trending 工作流说明](../github-trending-flow/README.md)
+- [GitHub Trending 工作流说明](../01-github-trending/README.md)
