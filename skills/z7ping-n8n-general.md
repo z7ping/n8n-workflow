@@ -184,7 +184,17 @@ z7ping-n8n-workflow/
 2. **脱敏处理**：替换真实值为占位符（或改为 `$env.XXX` 引用）
 3. **提交到 Git**：推送到 Gitea + GitHub 双端
 4. **导入到 N8N**：在 N8N UI 中导入 JSON
-5. **配置环境变量**：在 Docker 环境变量中配置真实值
+5. **⚠️ 激活状态重置坑**：`n8n import:workflow` 导入会**重置工作流激活状态为未激活**。导入后必须逐个重新激活：
+   ```bash
+   # 列出所有工作流 ID
+   docker exec n8n n8n list:workflow
+   # 对需要运行的工作流重新激活
+   docker exec n8n n8n update:workflow --id <WORKFLOW_ID> --active=true
+   # 重启 n8n 使激活生效
+   docker compose restart n8n
+   ```
+   **验证**：重启后 `docker cp n8n:/home/node/.n8n/database.sqlite /tmp/ && sqlite3 /tmp/database.sqlite "SELECT name, active FROM workflow_entity"`，确认 active=1
+6. **配置环境变量**：在 Docker 环境变量中配置真实值
 
 ### 版本管理
 
